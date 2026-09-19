@@ -71,6 +71,19 @@ func runSelfTests() throws {
     try expect(ordered.map(\.name) == ["folder", "file2.txt", "file10.txt"], "Natural name sort and folders first")
     let sizeSettings = DisplaySettings(mode: .icons, sortKey: "size", ascending: false, groupByKind: true, foldersFirst: false)
     try expect(FileDisplay.sorted(files, settings: sizeSettings).map(\.size) == [20, 10, 0], "Descending size sort")
+    var recentSettings = DisplaySettings(mode: .gallery, groupByKind: true)
+    recentSettings.sortByRecent()
+    let datedFiles = [
+        FileEntry(url: temporary.appendingPathComponent("older-folder"), isDirectory: true, isPackage: false, size: 0, modified: Date(timeIntervalSince1970: 100)),
+        FileEntry(url: temporary.appendingPathComponent("newest.txt"), isDirectory: false, isPackage: false, size: 10, modified: Date(timeIntervalSince1970: 300)),
+        FileEntry(url: temporary.appendingPathComponent("recent-folder"), isDirectory: true, isPackage: false, size: 0, modified: Date(timeIntervalSince1970: 200)),
+        FileEntry(url: temporary.appendingPathComponent("unknown.txt"), isDirectory: false, isPackage: false, size: 0, modified: nil)
+    ]
+    let recentFiles = FileDisplay.sorted(datedFiles, settings: recentSettings)
+    try expect(recentFiles.map(\.name) == ["newest.txt", "recent-folder", "older-folder", "unknown.txt"], "Recent sort mixes files and folders by date, with unknown dates last")
+    try expect(recentSettings.mode == .gallery && FileDisplay.groups(recentFiles, enabled: recentSettings.groupByKind).count == 1, "Recent sort preserves view mode and removes grouping")
+    let restoredRecent = try JSONDecoder().decode(DisplaySettings.self, from: JSONEncoder().encode(recentSettings))
+    try expect(restoredRecent.isRecentFirst, "Recent sort persists across launches")
     let groups = FileDisplay.groups(ordered, enabled: true)
     try expect(groups.map(\.title) == ["Folders", "Text & Code"], "Grouping labels")
     try expect(groups.flatMap(\.entries).count == files.count, "Grouping preserves all files")

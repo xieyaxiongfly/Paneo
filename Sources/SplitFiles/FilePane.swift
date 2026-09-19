@@ -505,6 +505,10 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
 
     func sortMenu() -> NSMenu {
         let menu = NSMenu(); menu.autoenablesItems = false
+        let recent = NSMenuItem(title: "Recently Modified", action: #selector(sortByRecent), keyEquivalent: "")
+        recent.target = self; recent.state = settings.isRecentFirst ? .on : .off
+        recent.toolTip = "Newest first, with files and folders together and no grouping"
+        menu.addItem(recent); menu.addItem(.separator())
         let heading = NSMenuItem(title: "Sort By", action: nil, keyEquivalent: ""); heading.isEnabled = false; menu.addItem(heading)
         for (key, title) in [("name", "Name"), ("kind", "Kind"), ("date", "Date Modified"), ("size", "Size")] {
             let item = NSMenuItem(title: title, action: #selector(changeSort(_:)), keyEquivalent: "")
@@ -517,6 +521,17 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
         let grouping = NSMenuItem(title: "Group by Kind", action: #selector(toggleGrouping), keyEquivalent: ""); grouping.target = self; grouping.state = settings.groupByKind ? .on : .off
         grouping.isEnabled = settings.mode != .columns; grouping.toolTip = "Column view follows the folder hierarchy and does not group by kind"; menu.addItem(grouping)
         return menu
+    }
+    @objc private func sortByRecent() {
+        let selected = Set(selectedURLs)
+        settings.sortByRecent()
+        // Apply once even if the table already has the same date sort descriptor.
+        table.delegate = nil
+        table.sortDescriptors = [NSSortDescriptor(key: "date", ascending: false)]
+        table.delegate = self
+        if settings.mode == .columns { reload(preservingSelection: selected) }
+        else { sortEntries(); render(selection: selected) }
+        workspace?.save()
     }
     @objc private func changeSort(_ sender: NSMenuItem) {
         guard let key = sender.representedObject as? String else { return }

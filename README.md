@@ -68,6 +68,8 @@ Click a pane's terminal icon to replace its file view with a terminal in the cur
 
 A workspace's **×** closes it immediately when it has no terminals. If it contains terminal sessions, including hidden sessions, Paneo asks before ending them and their running tasks. Closing the last workspace leaves a new empty workspace.
 
+To see your latest changes first, choose **Sort & Group → Recently Modified**. This sorts newest first and turns off both **Folders First** and **Group by Kind**, so newer files appear above older folders. The setting is saved independently for each pane. You can re-enable Folders First from the same menu.
+
 ## Keyboard shortcuts
 
 | Action | Shortcut |

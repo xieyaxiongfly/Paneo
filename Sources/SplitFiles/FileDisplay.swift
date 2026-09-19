@@ -17,6 +17,13 @@ struct DisplaySettings: Codable {
     var ascending = true
     var groupByKind = false
     var foldersFirst = true
+    var isRecentFirst: Bool { sortKey == "date" && !ascending && !foldersFirst && !groupByKind }
+    mutating func sortByRecent() {
+        sortKey = "date"
+        ascending = false
+        foldersFirst = false
+        groupByKind = false
+    }
 }
 
 struct FileGroup {
