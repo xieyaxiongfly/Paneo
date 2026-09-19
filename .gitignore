@@ -1,0 +1,35 @@
+# SwiftPM and Xcode build products
+.build/
+.swiftpm/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# Packaged applications and disk images
+/dist/
+*.dmg
+*.dSYM/
+*.xcarchive/
+
+# Local manual-test files
+/demo/
+
+# macOS metadata and editor files
+.DS_Store
+._*
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.p12
+*.p8
+*.mobileprovision
+*.log
