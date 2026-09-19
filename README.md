@@ -70,6 +70,8 @@ A workspace's **×** closes it immediately when it has no terminals. If it conta
 
 To see your latest changes first, choose **Sort & Group → Recently Modified**. This sorts newest first and turns off both **Folders First** and **Group by Kind**, so newer files appear above older folders. The setting is saved independently for each pane. You can re-enable Folders First from the same menu.
 
+Double-click the current folder breadcrumb to rename that folder. Right-click any visible folder breadcrumb for **Rename…**, **Copy Path**, **Show in Finder**, or **Pin to Sidebar**. Renaming updates matching pane paths, navigation history, saved workspace paths, and pinned folders.
+
 ## Keyboard shortcuts
 
 | Action | Shortcut |
@@ -110,7 +112,7 @@ codesign --verify --deep --strict dist/Paneo.app
 bash scripts/build-icon.sh
 ```
 
-The six self-test groups cover copy conflicts, recursive-copy protection, saved-layout round trips, all eleven layout presets, sorting/grouping settings, and directional pane navigation. UI changes also need manual verification in the app.
+The seven self-test groups cover copy conflicts, recursive-copy protection, saved-layout round trips, all eleven layout presets, sorting/grouping settings, renamed-folder path updates, and directional pane navigation. UI changes also need manual verification in the app.
 
 ### Repository layout
 

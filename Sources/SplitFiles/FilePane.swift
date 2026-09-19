@@ -124,9 +124,13 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
         forwardButton = ActionButton("", symbol: "chevron.right", help: "Forward · ⌘]") { [weak self] in self?.activate(); self?.forward() }
         let up = ActionButton("", symbol: "arrow.up", help: "Enclosing Folder · ⌘↑") { [weak self] in self?.activate(); self?.up() }
         for button in [backButton!, forwardButton!, up] { header.addArrangedSubview(button) }
-        pathControl.onNavigate = { [weak self] url in self?.activate(); self?.navigate(to: url) }
+        pathControl.onNavigate = { [weak self] url in
+            guard let self else { return }; self.activate()
+            if self.directory.standardizedFileURL != url.standardizedFileURL { self.navigate(to: url) }
+        }
+        pathControl.onAction = { [weak self] action, url in self?.performBreadcrumbAction(action, at: url) }
         pathControl.setAccessibilityLabel("Folder Path")
-        pathControl.setAccessibilityHelp("Click any folder in the path to open it")
+        pathControl.setAccessibilityHelp("Click a parent folder to open it. Double-click the current folder to rename it. Right-click for more actions.")
         pathControl.setContentHuggingPriority(.defaultLow, for: .horizontal)
         pathControl.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         header.addArrangedSubview(pathControl)
@@ -393,6 +397,34 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
             do { try FileManager.default.createDirectory(at: target.appendingPathComponent(name), withIntermediateDirectories: false); self.reload() }
             catch { self.showError(error.localizedDescription) }
         }
+    }
+    private func performBreadcrumbAction(_ action: BreadcrumbAction, at source: URL) {
+        activate()
+        switch action {
+        case .copyPath:
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(source.path, forType: .string)
+        case .reveal: NSWorkspace.shared.activateFileViewerSelecting([source])
+        case .pin: workspace?.pinFolders([source])
+        case .rename:
+            guard source.path != "/", window?.attachedSheet == nil else { return }
+            prompt(title: "Rename Folder", initial: source.lastPathComponent, button: "Rename") { [weak self] name in
+                guard let self, self.validName(name), name != source.lastPathComponent else { return }
+                let destination = source.deletingLastPathComponent().appendingPathComponent(name)
+                do {
+                    try FileManager.default.moveItem(at: source, to: destination)
+                    self.workspace?.folderRenamed(from: source, to: destination)
+                } catch { self.showError(error.localizedDescription) }
+            }
+        }
+    }
+    func folderRenamed(from source: URL, to destination: URL) {
+        history = history.map { FolderRelocation.url($0, from: source, to: destination) }
+        let updated = FolderRelocation.url(directory, from: source, to: destination)
+        guard updated != directory else { reload(); return }
+        directory = updated
+        pathControl.url = updated; pathControl.toolTip = updated.path
+        watchDirectory(); reload()
     }
     @objc func renameFile() {
         guard !terminalVisible else { return }

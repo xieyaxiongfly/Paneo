@@ -371,6 +371,19 @@ final class Workspace: NSViewController, NSMenuDelegate {
         }
         root = remove(root); rebuild(); activate(root.panes[0]); view.window?.makeFirstResponder(root.panes[0].focusView); save()
     }
+    func folderRenamed(from source: URL, to destination: URL) {
+        func relocate(_ node: SavedNode) -> SavedNode {
+            var node = node
+            if let path = node.path { node.path = FolderRelocation.url(URL(fileURLWithPath: path), from: source, to: destination).path }
+            node.children = node.children?.map(relocate)
+            return node
+        }
+        for index in sessions.indices { sessions[index].layout = relocate(sessions[index].layout) }
+        previousLayout = previousLayout.map(relocate)
+        (root.panes + liveWorkspaces.values.flatMap { $0.panes }).forEach { $0.folderRenamed(from: source, to: destination) }
+        sidebar.folderRenamed(from: source, to: destination)
+        save()
+    }
     func save() {
         guard !restoringSession else { return }
         updateControls()

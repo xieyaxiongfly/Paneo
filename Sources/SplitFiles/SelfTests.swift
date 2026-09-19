@@ -93,6 +93,13 @@ func runSelfTests() throws {
     let legacy = try JSONDecoder().decode(SavedNode.self, from: Data("{\"path\":\"/tmp\"}".utf8))
     try expect(legacy.display == nil, "Old saved layouts still load")
     print("PASS: natural sorting, descending sorting, grouping and backwards-compatible display settings")
+    let originalFolder = temporary.appendingPathComponent("slides")
+    let renamedFolder = temporary.appendingPathComponent("lecture-slides")
+    try expect(FolderRelocation.url(originalFolder, from: originalFolder, to: renamedFolder) == renamedFolder, "Renamed folder path follows new name")
+    try expect(FolderRelocation.url(originalFolder.appendingPathComponent("week1/notes.pdf"), from: originalFolder, to: renamedFolder) == renamedFolder.appendingPathComponent("week1/notes.pdf"), "Descendant paths follow folder rename")
+    let sibling = temporary.appendingPathComponent("slides-backup")
+    try expect(FolderRelocation.url(sibling, from: originalFolder, to: renamedFolder) == sibling, "Similarly named siblings remain unchanged")
+    print("PASS: renamed folder paths, descendants and sibling boundaries")
     let origin = NSRect(x: 0, y: 100, width: 100, height: 100)
     let neighbors = [NSRect(x: 105, y: 100, width: 100, height: 100), NSRect(x: 0, y: -5, width: 100, height: 100), NSRect(x: 105, y: -5, width: 100, height: 100)]
     try expect(PaneDirection.right.neighbor(from: origin, among: neighbors) == 0, "Right prefers aligned pane over diagonal")
@@ -102,5 +109,5 @@ func runSelfTests() throws {
     let tall = NSRect(x: 0, y: 0, width: 100, height: 200)
     try expect(PaneDirection.left.neighbor(from: neighbors[0], among: [tall]) == 0, "Asymmetric split reaches tall adjacent pane")
     print("PASS: directional pane navigation handles grids, edges and asymmetric layouts")
-    print("All 6 self-test groups passed.")
+    print("All 7 self-test groups passed.")
 }

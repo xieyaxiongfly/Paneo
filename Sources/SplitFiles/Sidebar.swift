@@ -78,6 +78,11 @@ final class Sidebar: NSVisualEffectView, NSOutlineViewDataSource, NSOutlineViewD
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    func folderRenamed(from source: URL, to destination: URL) {
+        pinnedPaths = pinnedPaths.map { FolderRelocation.url(URL(fileURLWithPath: $0), from: source, to: destination).path }
+        UserDefaults.standard.set(pinnedPaths, forKey: "pinnedFolders")
+        reloadPins()
+    }
     func isPinned(_ url: URL) -> Bool { pinnedPaths.contains(url.standardizedFileURL.path) }
     func togglePin(_ url: URL) {
         if isPinned(url) {

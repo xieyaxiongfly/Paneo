@@ -1,7 +1,20 @@
 import AppKit
 
+private final class BreadcrumbButton: ActionButton {
+    var onDoubleClick: (() -> Void)?
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2, let onDoubleClick { onDoubleClick(); return }
+        super.mouseDown(with: event)
+    }
+}
+
+enum BreadcrumbAction: String, CaseIterable {
+    case rename = "Rename…", copyPath = "Copy Path", reveal = "Show in Finder", pin = "Pin to Sidebar"
+}
+
 /// Ancestors remain clickable; narrow panes fold them into a single menu.
 final class FolderBreadcrumb: NSView {
+    var onAction: ((BreadcrumbAction, URL) -> Void)?
     var onNavigate: ((URL) -> Void)?
     var url: URL? { didSet { signature = ""; needsLayout = true } }
     private var signature = ""
@@ -64,7 +77,21 @@ final class FolderBreadcrumb: NSView {
         }
         for index in start..<paths.count {
             let path = paths[index], current = index == paths.count - 1
-            let button = ActionButton(title(path), symbol: nil, help: path.path) { [weak self] in self?.onNavigate?(path) }
+            let button = BreadcrumbButton(title(path), symbol: nil, help: path.path) { [weak self] in
+                self?.onNavigate?(path)
+            }
+            if current && path.path != "/" {
+                button.onDoubleClick = { [weak self] in self?.onAction?(.rename, path) }
+                button.toolTip = path.path + "\nDouble-click to rename. Right-click for more actions."
+            }
+            let menu = NSMenu(); menu.autoenablesItems = false
+            for action in BreadcrumbAction.allCases {
+                let item = NSMenuItem(title: action.rawValue, action: #selector(performFolderAction(_:)), keyEquivalent: "")
+                item.target = self; item.representedObject = (action, path)
+                item.isEnabled = action != .rename || path.path != "/"
+                menu.addItem(item)
+            }
+            button.menu = menu
             button.compact = true
             button.showsCapsuleBackground = true
             button.contentHorizontalInset = 14
@@ -81,6 +108,10 @@ final class FolderBreadcrumb: NSView {
             addSubview(button); x += button.frame.width
             if !current { addChevron(at: x); x += 18 }
         }
+    }
+    @objc private func performFolderAction(_ sender: NSMenuItem) {
+        guard let (action, path) = sender.representedObject as? (BreadcrumbAction, URL) else { return }
+        onAction?(action, path)
     }
     private func addChevron(at x: CGFloat) {
         let separator = NSImageView(frame: NSRect(x: x + 4, y: (bounds.height - 12) / 2, width: 10, height: 12))
