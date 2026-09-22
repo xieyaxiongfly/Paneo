@@ -29,6 +29,12 @@ enum PaneDirection {
 }
 
 extension FilePane {
+    func handleFileDeleteKey(_ event: NSEvent) -> Bool {
+        guard event.keyCode == 51, event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty else { return false }
+        if !event.isARepeat && window?.attachedSheet == nil { trashFiles() }
+        return true
+    }
+
     func handleVimKey(_ event: NSEvent) -> Bool {
         guard window?.attachedSheet == nil, let key = event.charactersIgnoringModifiers?.lowercased(),
               let direction = PaneDirection.from(key) else { return false }

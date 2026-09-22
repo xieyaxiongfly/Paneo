@@ -5,7 +5,12 @@ import QuickLookThumbnailing
 final class FileCollection: NSCollectionView {
     weak var pane: FilePane?
     override func mouseDown(with event: NSEvent) {
-        pane?.activate(); super.mouseDown(with: event)
+        pane?.activate()
+        if event.clickCount == 2, let path = indexPathForItem(at: convert(event.locationInWindow, from: nil)),
+           let label = item(at: path)?.textField, label.convert(label.bounds, to: self).contains(convert(event.locationInWindow, from: nil)) {
+            selectionIndexPaths = [path]; pane?.renameFile(); return
+        }
+        super.mouseDown(with: event)
         if event.clickCount == 2 { pane?.openSelected() }
     }
     override func rightMouseDown(with event: NSEvent) {
@@ -17,6 +22,7 @@ final class FileCollection: NSCollectionView {
         super.rightMouseDown(with: event)
     }
     override func keyDown(with event: NSEvent) {
+        if pane?.handleFileDeleteKey(event) == true { return }
         if pane?.handleVimKey(event) == true { return }
         switch event.keyCode { case 49: pane?.preview(); case 36: pane?.renameFile(); default: super.keyDown(with: event) }
     }
@@ -34,6 +40,14 @@ final class FileCollection: NSCollectionView {
 }
 
 private final class FileIconLabel: NSTextField {
+    override func mouseDown(with event: NSEvent) {
+        var ancestor = superview
+        while let view = ancestor {
+            if let collection = view as? FileCollection { collection.mouseDown(with: event); return }
+            ancestor = view.superview
+        }
+        super.mouseDown(with: event)
+    }
     override func rightMouseDown(with event: NSEvent) {
         var ancestor = superview
         while let view = ancestor {
@@ -131,6 +145,7 @@ final class IconPresentation: NSView, NSCollectionViewDataSource, NSCollectionVi
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     deinit { previewView?.close() }
+    var selectedNameField: NSTextField? { collection.selectionIndexPaths.first.flatMap { collection.item(at: $0)?.textField } }
     var selectedURLs: [URL] {
         collection.selectionIndexPaths.sorted().compactMap { path in
             guard groups.indices.contains(path.section), groups[path.section].entries.indices.contains(path.item) else { return nil }

@@ -106,12 +106,15 @@ This is a native Paneo menu, not a copy of Finder’s complete menu. Finder Sync
 | Enclosing folder | `⌘↑` |
 | Open selected item | `⌘↓` or double-click |
 | Quick Look | `Space` / `⌘Y` |
-| Rename | `Return` |
+| Rename inline | Double-click a filename or `Return` |
+| Save / cancel rename | `Return` / `Esc` |
 | New folder | `⇧⌘N` |
 | Copy / paste copies | `⌘C` / `⌘V` |
-| Move to Trash | `⌘Delete` |
+| Move to Trash (with confirmation) | `Backspace` / `⌘Delete` |
 | Refresh | `⌘R` |
 | Toggle hidden files | `⇧⌘.` |
+
+Single-item renaming edits the filename in place in list, icon, gallery, and column views. Double-click the filename to rename; double-click its icon to open. Return saves, Esc or clicking away cancels; name conflicts stay inline without replacing the destination. Backspace edits text while renaming and moves selected items to Trash (with confirmation) while browsing.
 
 Vim keys apply to file views, not text fields. In column view, `h` and `l` navigate between columns. `⌘H` focuses the left pane; Hide Paneo remains available in the application menu. macOS Mission Control shortcuts may take precedence over Control-arrow splits; adjust those assignments in System Settings if needed.
 

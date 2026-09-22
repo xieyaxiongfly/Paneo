@@ -13,7 +13,18 @@ struct FileEntry {
 
 final class FileTable: NSTableView {
     weak var pane: FilePane?
-    override func mouseDown(with event: NSEvent) { pane?.activate(); super.mouseDown(with: event) }
+    override func mouseDown(with event: NSEvent) {
+        pane?.activate()
+        let point = convert(event.locationInWindow, from: nil), row = row(at: convert(event.locationInWindow, from: nil))
+        if event.clickCount == 2, row >= 0,
+           let column = tableColumns.firstIndex(where: { $0.identifier.rawValue == "name" }),
+           let cell = view(atColumn: column, row: row, makeIfNecessary: false) as? NSTableCellView,
+           let label = cell.textField, label.convert(label.bounds, to: self).contains(point) {
+            selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            pane?.renameFile(); return
+        }
+        super.mouseDown(with: event)
+    }
     override func rightMouseDown(with event: NSEvent) {
         pane?.activate()
         let row = row(at: convert(event.locationInWindow, from: nil))
@@ -22,6 +33,7 @@ final class FileTable: NSTableView {
         super.rightMouseDown(with: event)
     }
     override func keyDown(with event: NSEvent) {
+        if pane?.handleFileDeleteKey(event) == true { return }
         if pane?.handleVimKey(event) == true { return }
         switch event.keyCode {
         case 49: pane?.preview()
@@ -67,6 +79,9 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
     weak var workspace: Workspace?
     private(set) var directory: URL
     let table = FileTable()
+    private var inlineRename: InlineRename?
+    private var renameNeedsReload = false
+    private var renameSelection: URL?
     private var entries: [FileEntry] = []
     private var rows: [FileListRow] = []
     private(set) var settings = DisplaySettings()
@@ -79,6 +94,7 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
     private let columns = ColumnPresentation(frame: .zero)
     private var sharingPicker: NSSharingServicePicker?
     var focusView: NSView {
+        if let inlineRename { return inlineRename.field }
         if let terminal = embeddedTerminal, !terminal.isHidden { return terminal.terminal }
         switch settings.mode { case .list: return table; case .columns: return columns.browser; case .icons, .gallery: return icons.collection }
     }
@@ -200,6 +216,7 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
         render(selection: [])
     }
     func setViewMode(_ mode: FileViewMode) {
+        inlineRename?.cancel()
         if terminalVisible { hideTerminal() }
         guard mode != settings.mode else { return }
         let selected = Set(selectedURLs), wasColumns = settings.mode == .columns
@@ -235,6 +252,7 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
     }
 
     func navigate(to url: URL, recordHistory: Bool = true) {
+        inlineRename?.cancel()
         if terminalVisible { hideTerminal() }
         let url = url.standardizedFileURL
         if recordHistory {
@@ -252,6 +270,7 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
     func toggleHidden() { showHidden.toggle(); pathControl.showHidden = showHidden; hiddenButton.image = NSImage(systemSymbolName: showHidden ? "eye" : "eye.slash", accessibilityDescription: "Hidden Files"); reload() }
 
     func reload(preservingSelection: Set<URL>? = nil) {
+        if inlineRename != nil { renameNeedsReload = true; return }
         generation += 1
         let token = generation, url = directory, hidden = showHidden
         let selected = preservingSelection ?? Set(selectedURLs)
@@ -419,13 +438,51 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
         watchDirectory(); reload()
     }
     @objc func renameFile() {
-        guard !terminalVisible else { return }
-        guard selectedURLs.count == 1, let source = selectedURLs.first else { return }
-        prompt(title: "Rename", initial: source.lastPathComponent, button: "Rename") { [weak self] name in
-            guard let self, self.validName(name), name != source.lastPathComponent else { return }
-            do { try FileManager.default.moveItem(at: source, to: source.deletingLastPathComponent().appendingPathComponent(name)); self.reload() }
-            catch { self.showError(error.localizedDescription) }
+        guard !terminalVisible, inlineRename == nil, window?.attachedSheet == nil,
+              selectedURLs.count == 1, let source = selectedURLs.first else { return }
+        activate()
+        let anchor: NSRect
+        switch settings.mode {
+        case .list:
+            guard let row = rows.firstIndex(where: { $0.entry?.url == source }),
+                  let column = table.tableColumns.firstIndex(where: { $0.identifier.rawValue == "name" }) else { return }
+            table.scrollRowToVisible(row)
+            guard let cell = table.view(atColumn: column, row: row, makeIfNecessary: true) as? NSTableCellView, let label = cell.textField else { return }
+            anchor = label.convert(label.bounds, to: self)
+        case .icons, .gallery:
+            guard let label = icons.selectedNameField else { return }
+            anchor = label.convert(label.bounds, to: self)
+        case .columns:
+            let browser = columns.browser, column = columns.browser.selectedColumn
+            let row = browser.selectedRow(inColumn: column)
+            guard row >= 0 else { return }
+            let frame = browser.frame(ofRow: row, inColumn: column)
+            anchor = browser.convert(NSRect(x: frame.minX + 24, y: frame.minY, width: max(40, frame.width - 28), height: frame.height), to: self)
         }
+        // Invalidate a pending directory read so it cannot redraw the row mid-edit.
+        generation += 1; loadingSince = nil
+        let width = min(max(anchor.width, 120), max(40, bounds.width - anchor.minX - 8))
+        let frame = NSRect(x: max(0, anchor.minX - 2), y: anchor.midY - 12, width: width, height: 24)
+        inlineRename = InlineRename(name: source.lastPathComponent, frame: frame, in: self, commit: { [weak self] name in
+            guard let self else { return }
+            guard !name.isEmpty, name != ".", name != "..", !name.contains("/"), !name.contains(":"), !name.contains("\0") else {
+                throw NSError(domain: "Paneo.Rename", code: 1, userInfo: [NSLocalizedDescriptionKey: "Enter a valid name without / or :."])
+            }
+            guard name != source.lastPathComponent else { return }
+            let destination = source.deletingLastPathComponent().appendingPathComponent(name)
+            try FileManager.default.moveItem(at: source, to: destination)
+            self.workspace?.folderRenamed(from: source, to: destination)
+            self.renameNeedsReload = true
+            self.renameSelection = destination
+        }, finished: { [weak self] restoreFocus in
+            guard let self else { return }
+            self.inlineRename = nil
+            let reloadNeeded = self.renameNeedsReload; self.renameNeedsReload = false
+            if restoreFocus { self.window?.makeFirstResponder(self.focusView) }
+            let selected = self.renameSelection; self.renameSelection = nil
+            if reloadNeeded { self.reload(preservingSelection: selected.map { Set([$0]) }) }
+        })
+        inlineRename?.begin()
     }
     @objc func copyFiles() {
         guard !terminalVisible else { return }
@@ -459,7 +516,7 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
         }
     }
     @objc func trashFiles() {
-        guard !terminalVisible else { return }
+        guard !terminalVisible, inlineRename == nil, window?.attachedSheet == nil else { return }
         let urls = selectedURLs; guard !urls.isEmpty, let window else { return }
         let alert = NSAlert(); alert.messageText = "Move \(urls.count) items to the Trash?"; alert.informativeText = "You can restore them from the Trash in Finder."; alert.addButton(withTitle: "Move to Trash"); alert.addButton(withTitle: "Cancel")
         alert.beginSheetModal(for: window) { [weak self] response in
@@ -482,6 +539,7 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
         alert.beginSheetModal(for: window) { response in if response == .alertFirstButtonReturn { completion(input.stringValue) } }
     }
     func openTerminal() {
+        inlineRename?.cancel()
         if embeddedTerminal == nil {
             let terminal = EmbeddedTerminal(pane: self, directory: directory)
             embeddedTerminal = terminal

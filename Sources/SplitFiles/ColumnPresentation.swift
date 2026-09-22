@@ -2,7 +2,15 @@ import AppKit
 
 final class FileBrowser: NSBrowser {
     weak var pane: FilePane?
-    override func mouseDown(with event: NSEvent) { pane?.activate(); super.mouseDown(with: event) }
+    override func mouseDown(with event: NSEvent) {
+        pane?.activate()
+        var row = 0, column = 0
+        let point = convert(event.locationInWindow, from: nil)
+        if event.clickCount == 2, getRow(&row, column: &column, for: point), point.x > frame(ofRow: row, inColumn: column).minX + 24 {
+            selectRow(row, inColumn: column); pane?.renameFile(); return
+        }
+        super.mouseDown(with: event)
+    }
     override func rightMouseDown(with event: NSEvent) {
         pane?.activate()
         var row = 0, column = 0
@@ -13,6 +21,7 @@ final class FileBrowser: NSBrowser {
         super.rightMouseDown(with: event)
     }
     override func keyDown(with event: NSEvent) {
+        if pane?.handleFileDeleteKey(event) == true { return }
         if pane?.handleVimKey(event) == true { return }
         switch event.keyCode { case 49: pane?.preview(); case 36: pane?.renameFile(); default: super.keyDown(with: event) }
     }
@@ -104,7 +113,16 @@ final class ColumnPresentation: NSView, NSBrowserDelegate {
         else if let parent = browser.parentForItems(inColumn: max(0, browser.selectedColumn)) as? ColumnNode { pane?.columnDirectoryChanged(parent.entry.url) }
         pane?.presentationSelectionChanged()
     }
-    @objc private func openSelection() { pane?.openSelected() }
+    @objc private func openSelection() {
+        if let event = NSApp.currentEvent, event.clickCount == 2 {
+            let point = browser.convert(event.locationInWindow, from: nil)
+            var row = 0, column = 0
+            if browser.getRow(&row, column: &column, for: point), point.x > browser.frame(ofRow: row, inColumn: column).minX + 24 {
+                pane?.renameFile(); return
+            }
+        }
+        pane?.openSelected()
+    }
     func browser(_ browser: NSBrowser, writeRowsWith rowIndexes: IndexSet, inColumn column: Int, to pasteboard: NSPasteboard) -> Bool {
         let urls = rowIndexes.compactMap { (browser.item(atRow: $0, inColumn: column) as? ColumnNode)?.entry.url as NSURL? }
         pasteboard.clearContents(); return pasteboard.writeObjects(urls)
