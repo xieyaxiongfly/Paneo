@@ -87,7 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool { canClose() }
     private func canClose() -> Bool {
         if FileOperations.activeCount > 0 {
-            let alert = NSAlert(); alert.messageText = "Copy in Progress"; alert.informativeText = "Please wait for the copy to finish before quitting."; alert.runModal(); return false
+            let alert = NSAlert(); alert.messageText = "File Operation in Progress"; alert.informativeText = "Please wait for file operations to finish before quitting."; alert.runModal(); return false
         }
         guard workspace.confirmQuitTerminals() else { return false }
         workspace.save(); workspace.stopAllTerminals(); return true

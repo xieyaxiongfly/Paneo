@@ -74,6 +74,21 @@ Click the triangle after any folder breadcrumb to list its subfolders, then choo
 
 Double-click the current folder breadcrumb to rename that folder. Right-click any visible folder breadcrumb for **Rename…**, **Copy Path**, **Show in Finder**, or **Pin to Sidebar**. Renaming updates matching pane paths, navigation history, saved workspace paths, and pinned folders.
 
+## File context menus
+
+Right-click files in list, icon, gallery, or column view to access the same actions as the toolbar’s More Actions menu. Available actions depend on the selection:
+
+- Open and **Open With** (compatible installed applications, plus Other…).
+- Show Package Contents for application bundles and other packages.
+- Move to Trash, Get Info, Rename (single item or batch text replacement/prefix), New Folder with Selection, Compress, Duplicate, Make Alias, and Quick Look.
+- The native macOS Share menu and a comma-separated Tags editor. For multiple selections, the editor changes shared tags while preserving tags unique to individual files.
+- Copy, Copy Path, Paste Items, and New Folder.
+- Paneo shortcuts: pin folders and open a terminal in the selected folder.
+
+Archives and aliases receive unique names on conflicts. Finder alias files are actual macOS bookmarks, not symbolic links. Right-clicking empty space offers actions for the current folder.
+
+This is a native Paneo menu, not a copy of Finder’s complete menu. Finder Sync extensions, cloud-provider download controls, Finder Quick Actions, and Finder-specific Services are not hosted here; use **Show in Finder** for those actions. Get Info currently shows a read-only summary, rather than Finder’s editable inspector. Batch renaming rejects existing destination names and rolls back completed renames if a later item fails.
+
 ## Keyboard shortcuts
 
 | Action | Shortcut |
@@ -114,7 +129,7 @@ codesign --verify --deep --strict dist/Paneo.app
 bash scripts/build-icon.sh
 ```
 
-The seven self-test groups cover copy conflicts, recursive-copy protection, saved-layout round trips, all eleven layout presets, sorting/grouping settings, renamed-folder path updates, and directional pane navigation. UI changes also need manual verification in the app.
+The eight self-test groups cover copy conflicts, recursive-copy protection, saved-layout round trips, all eleven layout presets, sorting/grouping settings, renamed-folder path updates, directional pane navigation, and context-menu file operations (aliases, ZIP archives, and tags). UI changes also need manual verification in the app.
 
 ### Repository layout
 
@@ -132,7 +147,7 @@ The build script adjusts SwiftPM's generated resource accessor so GhosttyTermina
 
 ## Current limitations
 
-Paneo is an early prototype. It does not currently support file moves/cut, file-operation undo, search, file tags, copy cancellation, or byte-level copy progress. Undo/Redo menu items apply to text editing only.
+Paneo is an early prototype. It does not currently support file moves/cut, file-operation undo, search, copy cancellation, or byte-level copy progress. Undo/Redo menu items apply to text editing only.
 
 Copying and dropping files creates copies, leaves originals in place, and adds a ` copy` suffix on name conflicts. Interrupted copies can leave incomplete destinations. Cloud placeholder files, network volumes, and very large directories have not been comprehensively tested. Cloud entries use locally synced folders, not cloud-service APIs.
 

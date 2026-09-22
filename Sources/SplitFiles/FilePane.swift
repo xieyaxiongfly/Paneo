@@ -163,13 +163,7 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
         table.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
         table.registerForDraggedTypes([.fileURL]); table.setDraggingSourceOperationMask(.copy, forLocal: false); table.setDraggingSourceOperationMask(.copy, forLocal: true)
         let menu = NSMenu(); menu.delegate = self
-        for (title, action) in [("Open", #selector(openSelected)), ("Quick Look", #selector(preview)), ("Show in Finder", #selector(reveal)), ("Rename…", #selector(renameFile)), ("Copy", #selector(copyFiles)), ("Paste Items", #selector(pasteFiles)), ("New Folder…", #selector(newFolder)), ("Move to Trash…", #selector(trashFiles))] {
-            let item = NSMenuItem(title: title, action: action, keyEquivalent: ""); item.target = self; menu.addItem(item)
-        }
         table.menu = menu; scroll.documentView = table
-        for (title, action) in [("Pin Current Folder to Sidebar", #selector(pinCurrentFolder)), ("Pin Selected Folders to Sidebar", #selector(pinSelectedFolders))] {
-            let item = NSMenuItem(title: title, action: action, keyEquivalent: ""); item.target = self; menu.addItem(item)
-        }
         icons.pane = self; columns.pane = self
         icons.collection.menu = menu; columns.browser.menu = menu
         for child in [scroll, icons, columns] {
@@ -367,11 +361,9 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
         guard !urls.isEmpty else { return false }; activate(); copy(urls); return true
     }
     func menuWillOpen(_ menu: NSMenu) {
-        for item in menu.items {
-            if item.action == #selector(renameFile) { item.isEnabled = selectedURLs.count == 1 }
-            else if item.action == #selector(newFolder) || item.action == #selector(pasteFiles) || item.action == #selector(pinCurrentFolder) { item.isEnabled = true }
-            else { item.isEnabled = !selectedURLs.isEmpty }
-        }
+        menu.removeAllItems()
+        let actions = actionsMenu()
+        for item in actions.items { actions.removeItem(item); menu.addItem(item) }
         menu.autoenablesItems = false
     }
     @objc func openSelected() {
@@ -482,7 +474,7 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
     private func validName(_ name: String) -> Bool {
         guard !name.isEmpty, name != ".", name != "..", !name.contains("/"), !name.contains(":"), !name.contains("\0") else { showError("Enter a valid filename without / or :."); return false }; return true
     }
-    private func prompt(title: String, initial: String, button: String, completion: @escaping (String) -> Void) {
+    func prompt(title: String, initial: String, button: String, completion: @escaping (String) -> Void) {
         guard let window else { return }; activate()
         let alert = NSAlert(); alert.messageText = title; alert.addButton(withTitle: button); alert.addButton(withTitle: "Cancel")
         let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 380, height: 24)); input.stringValue = initial; alert.accessoryView = input
@@ -580,24 +572,53 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
 
     func actionsMenu() -> NSMenu {
         let menu = NSMenu(); menu.autoenablesItems = false
-        for (title, action, enabled) in [
-            ("Open", #selector(openSelected), !selectedURLs.isEmpty),
-            ("Quick Look", #selector(preview), !selectedURLs.isEmpty),
-            ("Get Info…", #selector(fileInfo), !selectedURLs.isEmpty),
-            ("Show in Finder", #selector(reveal), true),
-            ("Pin Current Folder to Sidebar", #selector(pinCurrentFolder), true),
-            ("Pin Selected Folders to Sidebar", #selector(pinSelectedFolders), !selectedURLs.isEmpty),
-            ("New Folder…", #selector(newFolder), true),
-            ("Rename…", #selector(renameFile), selectedURLs.count == 1),
-            ("Duplicate", #selector(duplicateFiles), !selectedURLs.isEmpty),
-            ("Copy", #selector(copyFiles), !selectedURLs.isEmpty),
-            ("Paste Items", #selector(pasteFiles), NSPasteboard.general.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])),
-            ("Copy Path", #selector(copyPaths), true),
-            ("Move to Trash…", #selector(trashFiles), !selectedURLs.isEmpty),
-            (showHidden ? "Hide Hidden Files" : "Show Hidden Files", #selector(toggleHiddenFromMenu), true)
-        ] {
-            let item = NSMenuItem(title: title, action: action, keyEquivalent: ""); item.target = self; item.isEnabled = enabled; menu.addItem(item)
+        let urls = selectedURLs, selected = !urls.isEmpty
+        func add(_ title: String, _ action: Selector, enabled: Bool = true) {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self; item.isEnabled = enabled; menu.addItem(item)
         }
+        if selected {
+            add("Open", #selector(openSelected))
+            let openWith = NSMenuItem(title: "Open With", action: nil, keyEquivalent: "")
+            openWith.submenu = openWithMenu(urls); menu.addItem(openWith)
+            if urls.count == 1, (try? urls[0].resourceValues(forKeys: [.isPackageKey]))?.isPackage == true {
+                add("Show Package Contents", #selector(showPackageContents))
+            }
+            menu.addItem(.separator())
+            add("Move to Trash…", #selector(trashFiles))
+            menu.addItem(.separator())
+            add("Get Info…", #selector(fileInfo))
+            add(urls.count == 1 ? "Rename…" : "Rename Items…", urls.count == 1 ? #selector(renameFile) : #selector(renameItems))
+            add("New Folder with Selection…", #selector(newFolderWithSelection))
+            add("Compress", #selector(compressSelected))
+            add("Duplicate", #selector(duplicateFiles))
+            add("Make Alias", #selector(makeAliases))
+            add("Quick Look", #selector(preview))
+            sharingPicker = NSSharingServicePicker(items: urls)
+            if let share = sharingPicker?.standardShareMenuItem { menu.addItem(share) }
+            menu.addItem(.separator())
+            add("Copy", #selector(copyFiles))
+            add("Copy Path", #selector(copyPaths))
+            add("Tags…", #selector(editTags))
+            menu.addItem(.separator())
+            add("Show in Finder", #selector(reveal))
+            if urls.allSatisfy({ (try? $0.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])).map { $0.isDirectory == true && $0.isPackage != true } ?? false }) {
+                add("Pin Selected Folders to Sidebar", #selector(pinSelectedFolders))
+                if urls.count == 1 { add("Open Terminal Here", #selector(openSelectedTerminal)) }
+            }
+        } else {
+            add("New Folder…", #selector(newFolder))
+            add("Get Info…", #selector(fileInfo))
+            add("Show in Finder", #selector(reveal))
+            add("Open Terminal Here", #selector(openSelectedTerminal))
+            add("Pin Current Folder to Sidebar", #selector(pinCurrentFolder))
+        }
+        menu.addItem(.separator())
+        add("Paste Items", #selector(pasteFiles), enabled: NSPasteboard.general.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]))
+        if selected { add("New Folder…", #selector(newFolder)) }
+        let sort = NSMenuItem(title: "Sort & Group", action: nil, keyEquivalent: "")
+        sort.submenu = sortMenu(); menu.addItem(sort)
+        add(showHidden ? "Hide Hidden Files" : "Show Hidden Files", #selector(toggleHiddenFromMenu))
         return menu
     }
     @objc private func pinCurrentFolder() { workspace?.pinFolders([directory]) }
@@ -624,8 +645,8 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
         NSPasteboard.general.clearContents(); NSPasteboard.general.setString(urls.map(\.path).joined(separator: "\n"), forType: .string)
     }
     @objc private func fileInfo() {
-        guard let window, !selectedURLs.isEmpty else { return }
-        let urls = selectedURLs
+        guard let window else { return }
+        let urls = selectedURLs.isEmpty ? [directory] : selectedURLs
         let details = urls.prefix(12).map { url -> String in
             let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey, .isDirectoryKey])
             let size = values?.isDirectory == true ? "Folder" : ByteCountFormatter.string(fromByteCount: Int64(values?.fileSize ?? 0), countStyle: .file)

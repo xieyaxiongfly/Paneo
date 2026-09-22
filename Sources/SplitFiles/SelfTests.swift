@@ -109,5 +109,50 @@ func runSelfTests() throws {
     let tall = NSRect(x: 0, y: 0, width: 100, height: 200)
     try expect(PaneDirection.left.neighbor(from: neighbors[0], among: [tall]) == 0, "Asymmetric split reaches tall adjacent pane")
     print("PASS: directional pane navigation handles grids, edges and asymmetric layouts")
-    print("All 7 self-test groups passed.")
+    let contextFolder = temporary.appendingPathComponent("context-actions")
+    try fm.createDirectory(at: contextFolder, withIntermediateDirectories: true)
+    let document = contextFolder.appendingPathComponent("notes with spaces.txt")
+    try Data("context test".utf8).write(to: document)
+    try ContextFileOperations.makeAlias(for: document)
+    let finderAlias = contextFolder.appendingPathComponent("notes with spaces.txt alias")
+    let resolvedAlias = try URL(resolvingAliasFileAt: finderAlias, options: [.withoutUI, .withoutMounting])
+    try expect(resolvedAlias.resolvingSymlinksInPath() == document.resolvingSymlinksInPath(), "Finder alias resolves to original")
+    try ContextFileOperations.makeAlias(for: document)
+    try expect(fm.fileExists(atPath: contextFolder.appendingPathComponent("notes with spaces.txt alias copy").path), "Alias name conflicts preserve existing alias")
+    try ContextFileOperations.compress([document], in: contextFolder)
+    try ContextFileOperations.compress([document], in: contextFolder)
+    try expect(fm.fileExists(atPath: contextFolder.appendingPathComponent("notes with spaces.txt copy.zip").path), "Archive name conflicts preserve existing archive")
+    let subfolder = contextFolder.appendingPathComponent("nested")
+    try fm.createDirectory(at: subfolder, withIntermediateDirectories: true)
+    try Data("nested test".utf8).write(to: subfolder.appendingPathComponent("child.txt"))
+    try ContextFileOperations.compress([document, subfolder], in: contextFolder)
+    let extracted = contextFolder.appendingPathComponent("extracted")
+    let unzip = Process(); unzip.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+    unzip.arguments = ["-x", "-k", contextFolder.appendingPathComponent("Archive.zip").path, extracted.path]
+    try unzip.run(); unzip.waitUntilExit()
+    try expect(unzip.terminationStatus == 0, "Archive extracts successfully")
+    let contents = try String(contentsOf: extracted.appendingPathComponent("notes with spaces.txt"))
+    let nestedContents = try String(contentsOf: extracted.appendingPathComponent("nested/child.txt"))
+    try expect(contents == "context test" && nestedContents == "nested test", "Multiple-item archive preserves names, folders and content")
+    try (document as NSURL).setResourceValue(["Paneo Test"], forKey: .tagNamesKey)
+    let tags = try document.resourceValues(forKeys: [.tagNamesKey]).tagNames ?? []
+    try expect(tags.contains("Paneo Test"), "Finder tags persist on disk")
+    let renamedDocument = contextFolder.appendingPathComponent("renamed.txt")
+    try ContextFileOperations.moveWithoutReplacing([(document, renamedDocument)])
+    try expect(fm.fileExists(atPath: renamedDocument.path) && !fm.fileExists(atPath: document.path), "Batch move reaches destination")
+    do {
+        try ContextFileOperations.moveWithoutReplacing([(renamedDocument, document), (contextFolder.appendingPathComponent("missing.txt"), contextFolder.appendingPathComponent("missing-renamed.txt"))])
+        throw TestFailure(message: "Missing source should reject batch move")
+    } catch is TestFailure { throw TestFailure(message: "Missing source should reject batch move") }
+    catch { }
+    try expect(fm.fileExists(atPath: renamedDocument.path) && !fm.fileExists(atPath: document.path), "Failed batch rolls back completed moves")
+    do {
+        try ContextFileOperations.moveWithoutReplacing([(renamedDocument, subfolder)])
+        throw TestFailure(message: "Existing destination should reject batch move")
+    } catch is TestFailure { throw TestFailure(message: "Existing destination should reject batch move") }
+    catch { }
+    let renamedContents = try String(contentsOf: renamedDocument)
+    try expect(renamedContents == "context test" && fm.fileExists(atPath: subfolder.appendingPathComponent("child.txt").path), "Rejected collision preserves both source and destination")
+    print("PASS: Finder aliases, archives, tags and batch-move rollback")
+    print("All 8 self-test groups passed.")
 }

@@ -3,6 +3,15 @@ import AppKit
 final class FileBrowser: NSBrowser {
     weak var pane: FilePane?
     override func mouseDown(with event: NSEvent) { pane?.activate(); super.mouseDown(with: event) }
+    override func rightMouseDown(with event: NSEvent) {
+        pane?.activate()
+        var row = 0, column = 0
+        if getRow(&row, column: &column, for: convert(event.locationInWindow, from: nil)) {
+            if !(selectedRowIndexes(inColumn: column)?.contains(row) ?? false) { selectRow(row, inColumn: column) }
+        } else { selectionIndexPaths = [] }
+        pane?.presentationSelectionChanged()
+        super.rightMouseDown(with: event)
+    }
     override func keyDown(with event: NSEvent) {
         if pane?.handleVimKey(event) == true { return }
         switch event.keyCode { case 49: pane?.preview(); case 36: pane?.renameFile(); default: super.keyDown(with: event) }

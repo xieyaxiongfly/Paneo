@@ -10,7 +10,9 @@ final class FileCollection: NSCollectionView {
     }
     override func rightMouseDown(with event: NSEvent) {
         pane?.activate()
-        if let path = indexPathForItem(at: convert(event.locationInWindow, from: nil)), !selectionIndexPaths.contains(path) { selectionIndexPaths = [path] }
+        if let path = indexPathForItem(at: convert(event.locationInWindow, from: nil)) {
+            if !selectionIndexPaths.contains(path) { selectionIndexPaths = [path] }
+        } else { selectionIndexPaths = [] }
         pane?.presentationSelectionChanged()
         super.rightMouseDown(with: event)
     }
@@ -31,6 +33,17 @@ final class FileCollection: NSCollectionView {
     }
 }
 
+private final class FileIconLabel: NSTextField {
+    override func rightMouseDown(with event: NSEvent) {
+        var ancestor = superview
+        while let view = ancestor {
+            if let collection = view as? FileCollection { collection.rightMouseDown(with: event); return }
+            ancestor = view.superview
+        }
+        super.rightMouseDown(with: event)
+    }
+}
+
 final class FileIconItem: NSCollectionViewItem {
     private static let thumbnails = NSCache<NSURL, NSImage>()
     private var fileURL: URL?
@@ -38,7 +51,7 @@ final class FileIconItem: NSCollectionViewItem {
     override func loadView() {
         view = NSView(frame: NSRect(x: 0, y: 0, width: 108, height: 108)); view.wantsLayer = true; view.layer?.cornerRadius = 7
         let icon = NSImageView(); icon.imageScaling = .scaleProportionallyUpOrDown
-        let label = NSTextField(wrappingLabelWithString: ""); label.font = InterfaceStyle.label; label.alignment = .center
+        let label = FileIconLabel(wrappingLabelWithString: ""); label.isSelectable = false; label.font = InterfaceStyle.label; label.alignment = .center
         label.maximumNumberOfLines = 2; label.lineBreakMode = .byTruncatingMiddle
         for child in [icon, label] { child.translatesAutoresizingMaskIntoConstraints = false; view.addSubview(child) }
         imageView = icon; textField = label
