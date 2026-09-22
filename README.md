@@ -70,6 +70,8 @@ A workspace's **×** closes it immediately when it has no terminals. If it conta
 
 To see your latest changes first, choose **Sort & Group → Recently Modified**. This sorts newest first and turns off both **Folders First** and **Group by Kind**, so newer files appear above older folders. The setting is saved independently for each pane. You can re-enable Folders First from the same menu.
 
+Click the triangle after any folder breadcrumb to list its subfolders, then choose one to enter it. The current path is checked in the menu; hidden folders follow the pane’s hidden-file setting.
+
 Double-click the current folder breadcrumb to rename that folder. Right-click any visible folder breadcrumb for **Rename…**, **Copy Path**, **Show in Finder**, or **Pin to Sidebar**. Renaming updates matching pane paths, navigation history, saved workspace paths, and pinned folders.
 
 ## Keyboard shortcuts

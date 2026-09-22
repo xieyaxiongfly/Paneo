@@ -255,7 +255,7 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
     func back() { guard historyIndex > 0 else { return }; historyIndex -= 1; navigate(to: history[historyIndex], recordHistory: false) }
     func forward() { guard historyIndex + 1 < history.count else { return }; historyIndex += 1; navigate(to: history[historyIndex], recordHistory: false) }
     func up() { navigate(to: directory.deletingLastPathComponent()) }
-    func toggleHidden() { showHidden.toggle(); hiddenButton.image = NSImage(systemSymbolName: showHidden ? "eye" : "eye.slash", accessibilityDescription: "Hidden Files"); reload() }
+    func toggleHidden() { showHidden.toggle(); pathControl.showHidden = showHidden; hiddenButton.image = NSImage(systemSymbolName: showHidden ? "eye" : "eye.slash", accessibilityDescription: "Hidden Files"); reload() }
 
     func reload(preservingSelection: Set<URL>? = nil) {
         generation += 1
