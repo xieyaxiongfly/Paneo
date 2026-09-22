@@ -15,14 +15,6 @@ final class FileTable: NSTableView {
     weak var pane: FilePane?
     override func mouseDown(with event: NSEvent) {
         pane?.activate()
-        let point = convert(event.locationInWindow, from: nil), row = row(at: convert(event.locationInWindow, from: nil))
-        if event.clickCount == 2, row >= 0,
-           let column = tableColumns.firstIndex(where: { $0.identifier.rawValue == "name" }),
-           let cell = view(atColumn: column, row: row, makeIfNecessary: false) as? NSTableCellView,
-           let label = cell.textField, label.convert(label.bounds, to: self).contains(point) {
-            selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-            pane?.renameFile(); return
-        }
         super.mouseDown(with: event)
     }
     override func rightMouseDown(with event: NSEvent) {
@@ -80,6 +72,9 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
     private(set) var directory: URL
     let table = FileTable()
     private var inlineRename: InlineRename?
+    private var renameClickMonitor: Any?
+    private var pendingClickRename: DispatchWorkItem?
+    private var lastFileClick: TimeInterval = 0
     private var renameNeedsReload = false
     private var renameSelection: URL?
     private var entries: [FileEntry] = []
@@ -130,7 +125,69 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
         navigate(to: directory)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    deinit { watcher?.cancel(); reloadWork?.cancel() }
+    deinit {
+        watcher?.cancel(); reloadWork?.cancel(); pendingClickRename?.cancel()
+        if let renameClickMonitor { NSEvent.removeMonitor(renameClickMonitor) }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        pendingClickRename?.cancel()
+        if let renameClickMonitor { NSEvent.removeMonitor(renameClickMonitor) }
+        renameClickMonitor = nil
+        guard window != nil else { return }
+        // Observe before native controls change selection, including NSBrowser's child views.
+        renameClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .leftMouseDragged, .keyDown, .scrollWheel]) { [weak self] event in
+            self?.handleRenameClick(event)
+            return event
+        }
+    }
+
+    private func selectedNameContains(_ pointInWindow: NSPoint) -> Bool {
+        guard selectedURLs.count == 1 else { return false }
+        switch settings.mode {
+        case .list:
+            let point = table.convert(pointInWindow, from: nil), row = table.selectedRow
+            guard row >= 0, table.row(at: point) == row,
+                  let column = table.tableColumns.firstIndex(where: { $0.identifier.rawValue == "name" }),
+                  let cell = table.view(atColumn: column, row: row, makeIfNecessary: false) as? NSTableCellView,
+                  let label = cell.textField else { return false }
+            return label.convert(label.bounds, to: table).contains(point)
+        case .icons, .gallery:
+            guard let label = icons.selectedNameField else { return false }
+            return label.visibleRect.contains(label.convert(pointInWindow, from: nil))
+        case .columns:
+            let browser = columns.browser, point = browser.convert(pointInWindow, from: nil)
+            var row = 0, column = 0
+            guard browser.getRow(&row, column: &column, for: point),
+                  column == browser.selectedColumn, row == browser.selectedRow(inColumn: column) else { return false }
+            let frame = browser.frame(ofRow: row, inColumn: column)
+            return point.x > frame.minX + 24 && point.x < frame.maxX - 18
+        }
+    }
+
+    private func handleRenameClick(_ event: NSEvent) {
+        pendingClickRename?.cancel(); pendingClickRename = nil
+        guard event.type == .leftMouseDown, event.window === window else { return }
+        let previousClick = lastFileClick
+        lastFileClick = event.timestamp
+        guard event.clickCount == 1, event.timestamp - previousClick > NSEvent.doubleClickInterval,
+              event.modifierFlags.intersection([.command, .shift, .control, .option]).isEmpty,
+              window?.isKeyWindow == true, !isHiddenOrHasHiddenAncestor, !terminalVisible,
+              inlineRename == nil, selectedNameContains(event.locationInWindow),
+              let source = selectedURLs.first else { return }
+        let directory = self.directory, mode = settings.mode, generation = self.generation
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.window?.isKeyWindow == true, !self.isHiddenOrHasHiddenAncestor,
+                  self.workspace?.activePane === self, !self.terminalVisible,
+                  self.directory == directory, self.settings.mode == mode, self.generation == generation,
+                  self.selectedURLs == [source], NSEvent.pressedMouseButtons == 0 else { return }
+            self.renameFile()
+        }
+        pendingClickRename = work
+        // Give a following click the full system interval to turn this into an Open.
+        DispatchQueue.main.asyncAfter(deadline: .now() + NSEvent.doubleClickInterval, execute: work)
+    }
 
     private func buildUI() {
         activeLine.wantsLayer = true

@@ -6,10 +6,6 @@ final class FileCollection: NSCollectionView {
     weak var pane: FilePane?
     override func mouseDown(with event: NSEvent) {
         pane?.activate()
-        if event.clickCount == 2, let path = indexPathForItem(at: convert(event.locationInWindow, from: nil)),
-           let label = item(at: path)?.textField, label.convert(label.bounds, to: self).contains(convert(event.locationInWindow, from: nil)) {
-            selectionIndexPaths = [path]; pane?.renameFile(); return
-        }
         super.mouseDown(with: event)
         if event.clickCount == 2 { pane?.openSelected() }
     }

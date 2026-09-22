@@ -4,11 +4,6 @@ final class FileBrowser: NSBrowser {
     weak var pane: FilePane?
     override func mouseDown(with event: NSEvent) {
         pane?.activate()
-        var row = 0, column = 0
-        let point = convert(event.locationInWindow, from: nil)
-        if event.clickCount == 2, getRow(&row, column: &column, for: point), point.x > frame(ofRow: row, inColumn: column).minX + 24 {
-            selectRow(row, inColumn: column); pane?.renameFile(); return
-        }
         super.mouseDown(with: event)
     }
     override func rightMouseDown(with event: NSEvent) {
@@ -114,13 +109,6 @@ final class ColumnPresentation: NSView, NSBrowserDelegate {
         pane?.presentationSelectionChanged()
     }
     @objc private func openSelection() {
-        if let event = NSApp.currentEvent, event.clickCount == 2 {
-            let point = browser.convert(event.locationInWindow, from: nil)
-            var row = 0, column = 0
-            if browser.getRow(&row, column: &column, for: point), point.x > browser.frame(ofRow: row, inColumn: column).minX + 24 {
-                pane?.renameFile(); return
-            }
-        }
         pane?.openSelected()
     }
     func browser(_ browser: NSBrowser, writeRowsWith rowIndexes: IndexSet, inColumn column: Int, to pasteboard: NSPasteboard) -> Bool {
