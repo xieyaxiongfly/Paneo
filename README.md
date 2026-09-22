@@ -19,6 +19,7 @@ Built with Swift and AppKit. Paneo implements its own file browser and uses macO
 - **Sidebar shortcuts:** favorites, pinned folders, and locally synced Google Drive, Dropbox, Box, and iCloud Drive folders when available.
 - **Embedded terminals:** open a terminal in a pane's current folder; return to files while keeping the session running.
 - **Keyboard navigation:** Vim-style file selection, directional pane switching, and directional splitting.
+- **Name conflicts:** paste and drag-and-drop copies ask for Keep Both, Replace, Skip, or Cancel, with Apply to All Conflicts for batches. Replace replaces a whole folder, not a merge. Duplicate still creates a uniquely named copy.
 - **File operations:** create folders, rename, copy, duplicate, paste, drag-and-drop copying, share, preview, and move to Trash.
 
 ## Requirements
@@ -132,7 +133,7 @@ codesign --verify --deep --strict dist/Paneo.app
 bash scripts/build-icon.sh
 ```
 
-The eight self-test groups cover copy conflicts, recursive-copy protection, saved-layout round trips, all eleven layout presets, sorting/grouping settings, renamed-folder path updates, directional pane navigation, and context-menu file operations (aliases, ZIP archives, and tags). UI changes also need manual verification in the app.
+The nine self-test groups cover copy conflicts, recursive-copy protection, saved-layout round trips, all eleven layout presets, sorting/grouping settings, renamed-folder path updates, directional pane navigation, context-menu file operations (aliases, ZIP archives, and tags), and transfer conflict choices with replacement failure protection. UI changes also need manual verification in the app.
 
 ### Repository layout
 

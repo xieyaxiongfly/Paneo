@@ -52,7 +52,7 @@ enum FileOperations {
         let ext = source.pathExtension
         let base = ext.isEmpty ? source.lastPathComponent : source.deletingPathExtension().lastPathComponent
         var index = 1
-        while FileManager.default.fileExists(atPath: candidate.path) {
+        while FileTransfer.exists(candidate) {
             let suffix = index == 1 ? " copy" : " copy \(index)"
             candidate = folder.appendingPathComponent(base + suffix + (ext.isEmpty ? "" : "." + ext))
             index += 1
@@ -551,7 +551,8 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
         let urls = (NSPasteboard.general.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
         if !urls.isEmpty { copy(urls) } else { NSSound.beep() }
     }
-    func copy(_ urls: [URL], into target: URL? = nil) {
+    func copy(_ urls: [URL], into target: URL? = nil, duplicate: Bool = false) {
+        guard let window, window.attachedSheet == nil, operationMessage == nil else { NSSound.beep(); return }
         let destination = (target ?? directory).resolvingSymlinksInPath().standardizedFileURL
         for url in urls {
             if !FileOperations.canCopy(url, into: destination) {
@@ -560,18 +561,12 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
         }
         FileOperations.activeCount += 1
         operationMessage = "Copying \(urls.count) items to \(destination.lastPathComponent)…"; updateStatus()
-        FileOperations.queue.async {
-            var errors: [String] = []
-            for url in urls {
-                do { try FileManager.default.copyItem(at: url, to: FileOperations.copyDestination(for: url, in: destination)) }
-                catch { errors.append("\(url.lastPathComponent)：\(error.localizedDescription)") }
-            }
-            DispatchQueue.main.async { [self] in
-                FileOperations.activeCount -= 1; operationMessage = nil; reload()
-                if !errors.isEmpty { showError("Some items could not be copied:\n" + errors.joined(separator: "\n")) }
-            }
-        }
+        FileTransfer(sources: urls, folder: destination, window: window, duplicate: duplicate) { [self] errors in
+            FileOperations.activeCount -= 1; operationMessage = nil; reload()
+            if !errors.isEmpty { showError("Some items could not be copied:\n" + errors.joined(separator: "\n")) }
+        }.start()
     }
+
     @objc func trashFiles() {
         guard !terminalVisible, inlineRename == nil, window?.attachedSheet == nil else { return }
         let urls = selectedURLs; guard !urls.isEmpty, let window else { return }
@@ -753,7 +748,7 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
     @objc private func toggleHiddenFromMenu() { toggleHidden() }
     @objc private func duplicateFiles() {
         guard let first = selectedURLs.first else { return }
-        copy(selectedURLs, into: first.deletingLastPathComponent())
+        copy(selectedURLs, into: first.deletingLastPathComponent(), duplicate: true)
     }
     @objc private func copyPaths() {
         let urls = selectedURLs.isEmpty ? [directory] : selectedURLs
