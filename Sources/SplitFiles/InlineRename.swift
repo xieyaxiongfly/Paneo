@@ -12,6 +12,7 @@ final class InlineRename: NSObject, NSTextFieldDelegate {
         super.init()
         field.frame = frame; field.stringValue = name; field.font = InterfaceStyle.body
         field.isEditable = true; field.isSelectable = true; field.isBezeled = true
+        field.drawsBackground = true; field.backgroundColor = .textBackgroundColor
         field.focusRingType = .default; field.delegate = self
         field.setAccessibilityLabel("Rename File")
         field.toolTip = "Return to save · Escape to cancel"

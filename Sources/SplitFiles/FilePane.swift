@@ -499,6 +499,7 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
               selectedURLs.count == 1, let source = selectedURLs.first else { return }
         activate()
         let anchor: NSRect
+        var originalLabel: NSTextField?
         switch settings.mode {
         case .list:
             guard let row = rows.firstIndex(where: { $0.entry?.url == source }),
@@ -506,9 +507,11 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
             table.scrollRowToVisible(row)
             guard let cell = table.view(atColumn: column, row: row, makeIfNecessary: true) as? NSTableCellView, let label = cell.textField else { return }
             anchor = label.convert(label.bounds, to: self)
+            originalLabel = label
         case .icons, .gallery:
             guard let label = icons.selectedNameField else { return }
             anchor = label.convert(label.bounds, to: self)
+            originalLabel = label
         case .columns:
             let browser = columns.browser, column = columns.browser.selectedColumn
             let row = browser.selectedRow(inColumn: column)
@@ -516,6 +519,9 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
             let frame = browser.frame(ofRow: row, inColumn: column)
             anchor = browser.convert(NSRect(x: frame.minX + 24, y: frame.minY, width: max(40, frame.width - 28), height: frame.height), to: self)
         }
+        // Remove the original text, including wrapped icon labels, while its editor is visible.
+        originalLabel?.isHidden = true
+        if settings.mode == .columns { columns.setRenamingURL(source) }
         // Invalidate a pending directory read so it cannot redraw the row mid-edit.
         generation += 1; loadingSince = nil
         let width = min(max(anchor.width, 120), max(40, bounds.width - anchor.minX - 8))
@@ -531,8 +537,10 @@ final class FilePane: NSView, NSTableViewDataSource, NSTableViewDelegate, QLPrev
             self.workspace?.folderRenamed(from: source, to: destination)
             self.renameNeedsReload = true
             self.renameSelection = destination
-        }, finished: { [weak self] restoreFocus in
+        }, finished: { [weak self, weak originalLabel] restoreFocus in
+            originalLabel?.isHidden = false
             guard let self else { return }
+            self.columns.setRenamingURL(nil)
             self.inlineRename = nil
             let reloadNeeded = self.renameNeedsReload; self.renameNeedsReload = false
             if restoreFocus { self.window?.makeFirstResponder(self.focusView) }

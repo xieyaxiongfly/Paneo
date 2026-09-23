@@ -24,17 +24,18 @@ final class FileBrowser: NSBrowser {
     @objc func paste(_ sender: Any?) { pane?.pasteFiles() }
 }
 
-private final class ColumnNode {
+private final class ColumnNode: NSObject {
     let entry: FileEntry
     var children: [ColumnNode]?
     var loading = false
-    init(_ entry: FileEntry) { self.entry = entry }
+    init(_ entry: FileEntry) { self.entry = entry; super.init() }
 }
 
 final class ColumnPresentation: NSView, NSBrowserDelegate {
     let browser = FileBrowser()
     weak var pane: FilePane? { didSet { browser.pane = pane } }
     private var root: ColumnNode?
+    private var renamingURL: URL?
     private var generation = 0
     private var showsHiddenFiles = false
     private var settings = DisplaySettings()
@@ -65,6 +66,18 @@ final class ColumnPresentation: NSView, NSBrowserDelegate {
         let paths = entries.enumerated().compactMap { selection.contains($0.element.url) ? IndexPath(index: $0.offset) : nil }
         if !paths.isEmpty { browser.selectionIndexPaths = paths; synchronizeDirectoryFromSelection() }
     }
+    func setRenamingURL(_ url: URL?) {
+        let previous = renamingURL
+        renamingURL = url
+        let selection = browser.selectionIndexPaths
+        for column in 0...max(0, browser.lastColumn) {
+            guard let parent = browser.parentForItems(inColumn: column) as? ColumnNode,
+                  (parent.children ?? []).contains(where: { $0.entry.url == previous || $0.entry.url == url }) else { continue }
+            browser.reloadColumn(column)
+        }
+        browser.selectionIndexPaths = selection
+    }
+
     func rootItem(for browser: NSBrowser) -> Any? { root }
     func browser(_ browser: NSBrowser, numberOfChildrenOfItem item: Any?) -> Int {
         guard let node = item as? ColumnNode else { return 0 }
@@ -92,11 +105,15 @@ final class ColumnPresentation: NSView, NSBrowserDelegate {
     }
     func browser(_ browser: NSBrowser, child index: Int, ofItem item: Any?) -> Any { (item as! ColumnNode).children![index] }
     func browser(_ browser: NSBrowser, isLeafItem item: Any?) -> Bool { (item as? ColumnNode).map { !$0.entry.isFolder } ?? false }
-    func browser(_ browser: NSBrowser, objectValueForItem item: Any?) -> Any? { (item as? ColumnNode)?.entry.name }
+    func browser(_ browser: NSBrowser, objectValueForItem item: Any?) -> Any? {
+        guard let node = item as? ColumnNode else { return nil }
+        return node.entry.url == renamingURL ? "" : node.entry.name
+    }
     func browser(_ browser: NSBrowser, willDisplayCell cell: Any, atRow row: Int, column: Int) {
         guard let node = browser.item(atRow: row, inColumn: column) as? ColumnNode, let cell = cell as? NSBrowserCell else { return }
         cell.image = NSWorkspace.shared.icon(forFile: node.entry.url.path); cell.image?.size = NSSize(width: 18, height: 18)
         cell.font = InterfaceStyle.body; cell.lineBreakMode = .byTruncatingMiddle
+        cell.stringValue = node.entry.url == renamingURL ? "" : node.entry.name
     }
     @objc private func selectionChanged() {
         pane?.activate()
